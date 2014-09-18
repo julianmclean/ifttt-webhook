@@ -3,6 +3,7 @@
 require_once(dirname(__FILE__) . '/settings.php');
 require_once(dirname(__FILE__) . '/log.php');
 require_once(dirname(__FILE__) . '/plugin.php');
+require_once(dirname(__FILE__) . '/credentials.php');
 
 
 error_reporting(-1);
@@ -32,12 +33,21 @@ switch ($xml->methodName) {
 
     case 'metaWeblog.newPost':
         __log("Processing newpost payload");
-        
+
         //@see http://codex.wordpress.org/XML-RPC_WordPress_API/Posts#wp.newPost
         $obj = new stdClass;
+
         //get the parameters from xml
-        $obj->user = (string) $xml->params->param[1]->value->string;
-        $obj->pass = (string) $xml->params->param[2]->value->string;
+        //don't pass them on for security reasons
+        $user = (string) $xml->params->param[1]->value->string;
+        $pass = (string) $xml->params->param[2]->value->string;
+
+		//Secure with user/pass - create credentials.php with $WP_USER and $WP_PASSWORD defined as strings
+		if($WP_USER != $user || $WP_PASSWORD != $pass)
+		{
+                __log("No valid plugin specified");
+                failure(401);
+		}
 
         //@see content in the wordpress docs
         $content = $xml->params->param[3]->value->struct->member;
@@ -65,15 +75,15 @@ switch ($xml->methodName) {
 
         // Plugin details
         if ($ALLOW_PLUGINS) {
-            
+
             __log("Plugins are permitted");
-            
+
             foreach ($obj->categories as $category) {
                 if (strpos($category, 'plugin:') !== false)
                         $__PLUGIN = $category;
             }
-            
-            // If we allow plugins, pass the constructed object to 
+
+            // If we allow plugins, pass the constructed object to
             if ($__PLUGIN) {
                 $processed = executePlugin($__PLUGIN, $obj, $content);
                 if ($processed)
@@ -83,14 +93,14 @@ switch ($xml->methodName) {
                     __log("Plugin was invalid");
                     failure(400);
                 }
-            } 
+            }
             else
             {
                 __log("No valid plugin specified");
                 failure(400);
             }
         }
-        
+
         //Make the webrequest
         //Only if we have a valid url
         if ($url)
@@ -118,9 +128,9 @@ switch ($xml->methodName) {
 
 /** Copied from wordpress */
 function success($innerXML) {
-    
+
     __log("Success!");
-    
+
     $xml = <<<EOD
 <?xml version="1.0"?>
 <methodResponse>
@@ -148,9 +158,9 @@ function output($xml) {
 }
 
 function failure($status) {
-    
+
     __log("Failure: $status", 'ERROR');
-    
+
     $xml = <<<EOD
 <?xml version="1.0"?>
 <methodResponse>
